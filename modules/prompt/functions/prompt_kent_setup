@@ -1,0 +1,83 @@
+kent_venv() {
+  [[ -n $VIRTUAL_ENV ]] && print "%f($(basename $VIRTUAL_ENV)) "
+}
+
+kent_vimode(){
+    case $KEYMAP in
+        main|viins)
+            ;;
+        vicmd)
+            print "%f[v] "
+            ;;
+    esac
+}
+
+kent_prompt() {
+  print "%(0?.$on_color.$err_color)$prompt_char"
+}
+
+kent_path() {
+  print "%(0?.$on_color.$err_color)$(dirs -c; dirs)"
+}
+
+git_branch_name() {
+  local branch_name="$(command git rev-parse --abbrev-ref HEAD 2> /dev/null)"
+  [[ -n $branch_name ]] && print "$branch_name"
+}
+
+git_repo_status(){
+  # $(git remote update -p &> /dev/null)
+  local rs="$(command git status --porcelain -b)"
+
+  if $(print "$rs" | grep '^??' &> /dev/null); then # untracked files
+    print "%F{red}"
+  elif $(print "$rs" | grep -v '^##' &> /dev/null); then # is dirty
+    print "%F{yellow}"
+  elif $(print "$rs" | grep '^## .*diverged' &> /dev/null); then # has diverged
+    print "%F{white}"
+  elif $(print "$rs" | grep '^## .*behind' &> /dev/null); then # is behind
+    print "%F{blue}"
+  elif $(print "$rs" | grep '^## .*ahead' &> /dev/null); then # is ahead
+    print "%F{magenta}"
+  else # is clean
+    print "%F{green}"
+  fi
+}
+
+kent_git() {
+  local bname=$(git_branch_name)
+  if [[ -n ${bname} ]]; then
+    local infos="$(git_repo_status)${bname}%f"
+    print "$infos"
+  fi
+}
+
+function zle-line-init zle-line-finish zle-keymap-select {
+  zle reset-prompt
+  zle -R
+}
+
+prompt_kent_precmd() {
+  zle -N zle-line-init
+  zle -N zle-keymap-select
+  zle -N zle-line-finish
+
+  NEWLINE=$'\n'
+
+  PROMPT='$(kent_path)${NEWLINE}$(kent_prompt)%f '
+  RPROMPT='$(kent_vimode)$(kent_venv)$(kent_git)'
+}
+
+prompt_kent_setup() {
+  prompt_char="\u25b6"
+  on_color="%F{green}"
+  off_color="%f"
+  err_color="%F{red}"
+
+  autoload -Uz add-zsh-hook
+
+  add-zsh-hook precmd prompt_kent_precmd
+  prompt_opts=(cr subst percent)
+}
+
+prompt_kent_setup "$@"
